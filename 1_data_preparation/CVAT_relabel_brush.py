@@ -39,6 +39,9 @@ def spam_key(q):
     while True:
         if not q.empty():
             value = q.get()
+            # pyautogui.keyDown('alt')
+            # pyautogui.press('tab')
+            # pyautogui.keyUp('alt')
         else:
             if value == 10:
                 continue
