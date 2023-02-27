@@ -23,9 +23,17 @@ def normalize_bbox(bbox, width, height):
         int(1000 * (bbox[3] / height)),
     ]
 
-# Todo: re-define list of label that we care
 
-class CocoDataset(Dataset):
+def unnormalize_bbox(nbbox, width, height):
+  return [
+      int((nbbox[0] * width) / 1000),
+      int((nbbox[1] * height) / 1000),
+      int((nbbox[2] * width) / 1000),
+      int((nbbox[3] * height) / 1000),
+  ]
+
+
+class DocumentLayoutAnalysisDataset(Dataset):
     def __init__(self, root_dir, annotation_file):
         self.root_dir = root_dir
         self.annotation_file = annotation_file
@@ -52,43 +60,83 @@ class CocoDataset(Dataset):
         annotations = self.coco.loadAnns(annotations_ids)
         # target['boxes'] = torch.Tensor([ann['bbox'] for ann in annotations])
         # target['labels'] = torch.LongTensor([ann['category_id'] for ann in annotations])
-        coco2normalbbox = [
-            [ann['bbox'][0], ann['bbox'][1], ann['bbox'][0] + ann['bbox'][2], ann['bbox'][1] + ann['bbox'][3]] for ann
-            in annotations]
-        bboxes = [normalize_bbox(box, image.width, image.height) for box in coco2normalbbox]
 
-        labels = [self.label2id[self.CVATid2label[ann['category_id']]] for ann in annotations]
+        bboxes = []
+        labels_id = []
+        words = []
+        for ann in annotations:
 
-        words = [ann['attributes']['value'] for ann in annotations]
+            coco2normalbbox = [ann['bbox'][0], ann['bbox'][1], ann['bbox'][0] + ann['bbox'][2], ann['bbox'][1] + ann['bbox'][3]]
+
+            # skip instance that is other than the label list in this problem
+            try:
+                box = normalize_bbox(coco2normalbbox, image.width, image.height)
+                label_id = self.label2id[self.CVATid2label[ann['category_id']]]
+                word = ann['attributes']['value']
+            except KeyError:
+                continue
+
+            bboxes.append(box)
+
+            labels_id.append(label_id)
+
+            words.append(word)
 
         # return image, annotations
-        return image, words, bboxes, labels
+        # print(type(words), words)
+        # encoding = processor(
+        #     np.array(image),
+        #     words,
+        #     boxes=torch.tensor(bboxes),
+        #     word_labels=torch.tensor(labels_id),
+        #     max_length=512,
+        #     truncation=True,
+        #     padding="max_length",
+        #     # pad_to_multiple_of=8,
+        #     return_tensors="pt"
+        # )
 
-    def draw_example(self, idx):
-        image, annotations = self.__getitem__(idx)
+        # return encoding
+        # return dict(
+        #     input_ids=encoding['input_ids'].flatten(),
+        #     attention_mask=encoding['attention_mask'].flatten(),
+        #     bbox=encoding['bbox'].flatten(end_dim=1),
+        #     image=encoding['image'].flatten(end_dim=1),
+        #     labels=encoding['labels'].flatten()
+        # )
+
+        # print(img_info)
+        return {'words':words, 'boxes':bboxes, 'labels_id': labels_id, 'id': img_info['id'], 'width': img_info['width'], 'height': img_info['height'], 'image_path': self.root_dir + os.sep+ img_info['file_name']}
+
+    def draw_example(self, boxes, labels_id, width, height, file_name, **kwargs):
         # Convert the image to a NumPy array and draw the annotations using cv2
-        image_np = np.array(image)
-        for ann in annotations:
-            bbox = ann["bbox"]
-            color = color_map.get(ann["category_id"])
+        # self.root_dir
+        image = Image.open(self.root_dir+os.sep+file_name).convert('RGB')
+        image = np.array(image)
+        for i in range(len(boxes)):
+            bbox = boxes[i]
+            bbox = unnormalize_bbox(bbox, width, height)
 
-            cv2.rectangle(image_np, (int(bbox[0]), int(bbox[1])),
-                          (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3])),
+            cvatId = self.label2CVATid[self.id2label[labels_id[i]]]
+            color = color_map.get(cvatId)
+
+            cv2.rectangle(image, (int(bbox[0]), int(bbox[1])),
+                          (int(bbox[2]), int(bbox[3])),
                           color, thickness=1)
-            label = self.coco.loadCats(ann["category_id"])[0]["name"]
-            cv2.putText(image_np, label, (int(bbox[0]), int(bbox[1] - 2)), cv2.FONT_HERSHEY_SIMPLEX,
+            label = self.coco.loadCats(cvatId)[0]["name"]
+            cv2.putText(image, label, (int(bbox[0]), int(bbox[1] - 2)), cv2.FONT_HERSHEY_SIMPLEX,
                         fontScale=0.25, color=(0, 0, 255), thickness=1)
 
-        return image_np
+        return image
         # cv2.imshow("Image with Annotations", image_np)
         # cv2.waitKey(0)
 
 
 if __name__ == "__main__":
-    root = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
-    ann_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/1_data_preparation/artifact/1000DataForOCR_fineLabel_dataset_coco.json"
-    dataset = CocoDataset(root, ann_file)
-
-    print(len(dataset))
-    dataset[0]
+    root = "/content/2_selected_sample"
+    ann_file = "/content/1000DataForOCR_fineLabel_dataset_coco_1.json"
+    torch_dataset = DocumentLayoutAnalysisDataset(root, ann_file)
+# dataset[0]
+# print(len(dataset))
+# cv2_imshow(dataset.draw_example(**dataset[57]))
 # print(dataset.draw_example(2))

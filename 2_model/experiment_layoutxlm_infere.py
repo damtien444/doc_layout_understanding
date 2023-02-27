@@ -1,7 +1,7 @@
 from enum import Enum
 
 from transformers import LayoutLMv2ForTokenClassification, LayoutXLMProcessor
-from data_loader_coco_image import CocoDataset
+from data_loader_coco_image import DocumentLayoutAnalysisDataset
 import copy
 import torch
 import numpy as np
@@ -11,7 +11,7 @@ import numpy as np
 
 root = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
 ann_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/1_data_preparation/artifact/1000DataForOCR_fineLabel_dataset_coco.json"
-dataset = CocoDataset(root, ann_file)
+dataset = DocumentLayoutAnalysisDataset(root, ann_file)
 
 model = LayoutLMv2ForTokenClassification.from_pretrained('microsoft/layoutxlm-base', num_labels=len(dataset.label_list), id2label=dataset.id2label, label2id=dataset.label2id)
 
