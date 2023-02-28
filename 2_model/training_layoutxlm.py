@@ -1,4 +1,4 @@
-from PIL.Image import Image
+from PIL import Image
 from transformers import LayoutXLMProcessor
 from datasets import Dataset
 from data_loader_coco_image import DocumentLayoutAnalysisDataset
@@ -7,6 +7,13 @@ from transformers import LayoutLMv2ForTokenClassification
 import numpy as np
 import torch
 from datasets import load_metric
+import wandb
+import os
+
+os.environ['WANDB_PROJECT']="layoutxlm"
+
+
+wandb.login()
 
 processor = LayoutXLMProcessor.from_pretrained(
     "microsoft/layoutxlm-base",
@@ -16,16 +23,16 @@ processor = LayoutXLMProcessor.from_pretrained(
 
 
 def to_dataset():
-    # for i in range(len(torch_dataset)):
-    for i in range(10):
+    for i in range(len(torch_dataset)):
+    # for i in range(10):
         yield torch_dataset[i]
 
 
-anno_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/0_data_repository/1000DataForOCR_fineLabel_dataset_coco.json"
-image_root_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
+anno_file = "0_data_repository/1000DataForOCR_fineLabel_dataset_coco.json"
+image_root_folder = "0_data_repository/2_selected_sample"
 torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
 ds = Dataset.from_generator(to_dataset)
-ds = ds.train_test_split(test_size=0.2, shuffle=True)
+ds = ds.train_test_split(test_size=0.1, shuffle=True)
 
 features = ds["train"].features
 column_names = ds["train"].column_names
@@ -115,22 +122,22 @@ from transformers import Trainer, TrainingArguments
 from transformers.data.data_collator import default_data_collator
 
 
-checkpoint_dir="/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/0_model_repository"
+checkpoint_dir="/home/tiendq/test_layoutlmv3/document-layout-analysis/0_model_repository"
 training_args = TrainingArguments(
     output_dir=checkpoint_dir,          # output directory
-    num_train_epochs=10,              # total number of training epochs
+    num_train_epochs=15,              # total number of training epochs
     per_device_train_batch_size=4,  # batch size per device during training
     per_device_eval_batch_size=4,   # batch size for evaluation
     warmup_steps=500,                # number of warmup steps for learning rate scheduler
     weight_decay=0.01,
     learning_rate=1e-5,
     evaluation_strategy="steps",
-    eval_steps=5,              # strength of weight decay
+    eval_steps=500,              # strength of weight decay
     logging_dir='./logs',            # directory for storing logs
-    logging_steps=5,
+    logging_steps=500,
     load_best_model_at_end=True,
     metric_for_best_model="f1",
-    # resume_from_checkpoint=True,
+    resume_from_checkpoint=True,
     greater_is_better=True,
     save_total_limit=3,
 
@@ -143,6 +150,8 @@ trainer = Trainer(
     eval_dataset=eval_dataset,
     data_collator=default_data_collator,
     compute_metrics=compute_metrics,             # evaluation dataset
+    
 )
 
 trainer.train()
+trainer.save_model()
