@@ -9,11 +9,20 @@ from torch.utils.data import Dataset
 from pycocotools.coco import COCO
 from PIL import Image, ImageDraw
 
-color_map = {4: (0, 0, 0), 5: (255, 0, 0), 6: (0, 255, 0), 21: (0, 0, 255),
-             22: (255, 255, 0), 23: (0, 255, 255), 24: (255, 0, 255), 25: (128, 128, 128),
-             26: (192, 192, 192), 10: (64, 64, 64)}
+color_map = {
+    'title': ((148, 102, 168), "magenta"),  # Purple
+    'explanation': ((6, 206, 211), "light_cyan"),  # Green
+    'answer': ((236, 126, 237), "light_magenta"),  # Yellow
+    'super_title': ((72, 189, 27), "light_green"),  # Gray 1
+    'header': ((124, 125, 121), "light_grey"),  # Gray 2
+    'footer': ((82, 82, 82), "dark_grey"),  # Gray 3
+    'ending': ((192, 184, 13), 'light_yellow'),  # Red
+    'heading': ((33,169,252), "light_blue"),  # Blue
+    'starting': ((211,63,69), "light_red")  # Black
+}
 
 label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting']
+
 
 def normalize_bbox(bbox, width, height):
     return [
@@ -25,16 +34,16 @@ def normalize_bbox(bbox, width, height):
 
 
 def unnormalize_bbox(nbbox, width, height):
-  return [
-      int((nbbox[0] * width) / 1000),
-      int((nbbox[1] * height) / 1000),
-      int((nbbox[2] * width) / 1000),
-      int((nbbox[3] * height) / 1000),
-  ]
+    return [
+        int((nbbox[0] * width) / 1000),
+        int((nbbox[1] * height) / 1000),
+        int((nbbox[2] * width) / 1000),
+        int((nbbox[3] * height) / 1000),
+    ]
 
 
 class DocumentLayoutAnalysisDataset(Dataset):
-    def __init__(self, root_dir, annotation_file):
+    def __init__(self, root_dir, annotation_file, has_label=True):
         self.root_dir = root_dir
         self.annotation_file = annotation_file
 
@@ -46,6 +55,7 @@ class DocumentLayoutAnalysisDataset(Dataset):
 
         self.label2id = {label: idx for idx, label in enumerate(label_list)}
         self.id2label = {idx: label for idx, label in enumerate(label_list)}
+        self.has_label = has_label
 
     def __len__(self):
         return len(self.image_ids)
@@ -66,19 +76,22 @@ class DocumentLayoutAnalysisDataset(Dataset):
         words = []
         for ann in annotations:
 
-            coco2normalbbox = [ann['bbox'][0], ann['bbox'][1], ann['bbox'][0] + ann['bbox'][2], ann['bbox'][1] + ann['bbox'][3]]
+            coco2normalbbox = [ann['bbox'][0], ann['bbox'][1], ann['bbox'][0] + ann['bbox'][2],
+                               ann['bbox'][1] + ann['bbox'][3]]
 
             # skip instance that is other than the label list in this problem
             try:
                 box = normalize_bbox(coco2normalbbox, image.width, image.height)
-                label_id = self.label2id[self.CVATid2label[ann['category_id']]]
+                if self.has_label:
+                    label_id = self.label2id[self.CVATid2label[ann['category_id']]]
                 word = ann['attributes']['value']
             except KeyError:
                 continue
 
             bboxes.append(box)
 
-            labels_id.append(label_id)
+            if self.has_label:
+                labels_id.append(label_id)
 
             words.append(word)
 
@@ -106,12 +119,19 @@ class DocumentLayoutAnalysisDataset(Dataset):
         # )
 
         # print(img_info)
-        return {'words':words, 'boxes':bboxes, 'labels_id': labels_id, 'id': img_info['id'], 'width': img_info['width'], 'height': img_info['height'], 'image_path': self.root_dir + os.sep+ img_info['file_name']}
+        if self.has_label:
+            return {'words': words, 'boxes': bboxes, 'labels_id': labels_id, 'id': img_info['id'],
+                    'width': img_info['width'], 'height': img_info['height'],
+                    'image_path': self.root_dir + os.sep + img_info['file_name']}
+        else:
+            return {'words': words, 'boxes': bboxes, 'id': img_info['id'],
+                    'width': img_info['width'], 'height': img_info['height'],
+                    'image_path': self.root_dir + os.sep + img_info['file_name']}
 
     def draw_example(self, boxes, labels_id, width, height, file_name, **kwargs):
         # Convert the image to a NumPy array and draw the annotations using cv2
         # self.root_dir
-        image = Image.open(self.root_dir+os.sep+file_name).convert('RGB')
+        image = Image.open(self.root_dir + os.sep + file_name).convert('RGB')
         image = np.array(image)
         for i in range(len(boxes)):
             bbox = boxes[i]

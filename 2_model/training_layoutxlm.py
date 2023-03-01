@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL.Image import Image
 from transformers import LayoutXLMProcessor
 from datasets import Dataset
 from data_loader_coco_image import DocumentLayoutAnalysisDataset
@@ -19,7 +19,10 @@ processor = LayoutXLMProcessor.from_pretrained(
     "microsoft/layoutxlm-base",
     apply_ocr=False,
     only_label_first_subword=False,
-    is_split_into_words=True)
+    is_split_into_words=True,
+    # todo
+    add_special_tokens={}
+)
 
 
 def to_dataset():
@@ -122,7 +125,7 @@ from transformers import Trainer, TrainingArguments
 from transformers.data.data_collator import default_data_collator
 
 
-checkpoint_dir="/home/tiendq/test_layoutlmv3/document-layout-analysis/0_model_repository"
+checkpoint_dir="/home/tiendq/Desktop/DocRec/3_model_checkpoint/0_model_repository"
 training_args = TrainingArguments(
     output_dir=checkpoint_dir,          # output directory
     num_train_epochs=15,              # total number of training epochs
@@ -150,7 +153,7 @@ trainer = Trainer(
     eval_dataset=eval_dataset,
     data_collator=default_data_collator,
     compute_metrics=compute_metrics,             # evaluation dataset
-    
+
 )
 
 trainer.train()
