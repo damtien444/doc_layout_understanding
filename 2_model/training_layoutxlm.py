@@ -1,4 +1,4 @@
-from PIL.Image import Image
+from PIL import Image
 from transformers import LayoutXLMProcessor
 from datasets import Dataset
 from data_loader_coco_image import DocumentLayoutAnalysisDataset
@@ -10,8 +10,12 @@ from datasets import load_metric
 import wandb
 import os
 
+# project name send to wandb
 os.environ['WANDB_PROJECT']="layoutxlm"
-
+# set cuda device use for training
+os.environ['CUDA_VISIBLE_DEVICES']='1'
+# limit numpy thread for not over gaining CPU consumption 
+os.environ['OMP_NUM_THREADS']='4'
 
 wandb.login()
 
@@ -21,7 +25,7 @@ processor = LayoutXLMProcessor.from_pretrained(
     only_label_first_subword=False,
     is_split_into_words=True,
     # todo
-    add_special_tokens={}
+    # add_special_tokens={}
 )
 
 
@@ -31,7 +35,7 @@ def to_dataset():
         yield torch_dataset[i]
 
 
-anno_file = "0_data_repository/1000DataForOCR_fineLabel_dataset_coco.json"
+anno_file = "0_data_repository/v1.1_title_and_supertitle_mis_define/instances_default.json"
 image_root_folder = "0_data_repository/2_selected_sample"
 torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
 ds = Dataset.from_generator(to_dataset)
@@ -100,21 +104,36 @@ def compute_metrics(p):
 
     # Remove ignored index (special tokens)
     true_predictions = [
-        [torch_dataset.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+        ["I-"+torch_dataset.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
     true_labels = [
-        [torch_dataset.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+        ["I-"+torch_dataset.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
 
     results = metric.compute(predictions=true_predictions, references=true_labels)
-    return {
-        "precision": results["overall_precision"],
-        "recall": results["overall_recall"],
-        "f1": results["overall_f1"],
-        "accuracy": results["overall_accuracy"],
-    }
+
+    no_flatten = ['overall_precision', "overall_recall", 'overall_f1', 'overall_accuracy']
+    to_be_flatten = []
+    for key, val in results.items():
+        if key in no_flatten:
+            continue
+        to_be_flatten.append(key)
+    
+    for key in to_be_flatten:
+        val = results[key]
+        for metr, value in val.items():
+            results[key+"_"+metr] = value
+        del results[key]
+
+    return results
+    # return {
+    #     "precision": results["overall_precision"],
+    #     "recall": results["overall_recall"],
+    #     "f1": results["overall_f1"],
+    #     "accuracy": results["overall_accuracy"],
+    # }
 
 
 import warnings
@@ -125,25 +144,25 @@ from transformers import Trainer, TrainingArguments
 from transformers.data.data_collator import default_data_collator
 
 
-checkpoint_dir="/home/tiendq/Desktop/DocRec/3_model_checkpoint/0_model_repository"
+checkpoint_dir="0_model_repository/1_update_titleandsupertitlemismatch"
 training_args = TrainingArguments(
     output_dir=checkpoint_dir,          # output directory
-    num_train_epochs=15,              # total number of training epochs
-    per_device_train_batch_size=4,  # batch size per device during training
-    per_device_eval_batch_size=4,   # batch size for evaluation
+    num_train_epochs=50,              # total number of training epochs
+    per_device_train_batch_size=16,  # batch size per device during training
+    per_device_eval_batch_size=16,   # batch size for evaluation
     warmup_steps=500,                # number of warmup steps for learning rate scheduler
     weight_decay=0.01,
-    learning_rate=1e-5,
+    learning_rate=3e-5,
     evaluation_strategy="steps",
     eval_steps=500,              # strength of weight decay
-    logging_dir='./logs',            # directory for storing logs
+    logging_dir=f'{checkpoint_dir}/logs',            # directory for storing logs
     logging_steps=500,
     load_best_model_at_end=True,
-    metric_for_best_model="f1",
-    resume_from_checkpoint=True,
+    metric_for_best_model="overall_f1",
+    resume_from_checkpoint=False,
     greater_is_better=True,
     save_total_limit=3,
-
+    
 )
 
 trainer = Trainer(
