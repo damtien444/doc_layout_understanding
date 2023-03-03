@@ -39,7 +39,7 @@ anno_file = "0_data_repository/v1.1_title_and_supertitle_mis_define/instances_de
 image_root_folder = "0_data_repository/2_selected_sample"
 torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
 ds = Dataset.from_generator(to_dataset)
-ds = ds.train_test_split(test_size=0.1, shuffle=True)
+ds = ds.train_test_split(test_size=0.2, shuffle=True)
 
 features = ds["train"].features
 column_names = ds["train"].column_names
