@@ -154,7 +154,7 @@ from transformers.data.data_collator import default_data_collator
 checkpoint_dir="0_model_repository/1_update_titleandsupertitlemismatch"
 training_args = TrainingArguments(
     output_dir=checkpoint_dir,          # output directory
-    num_train_epochs=50,              # total number of training epochs
+    num_train_epochs=15,              # total number of training epochs
     per_device_train_batch_size=4,  # batch size per device during training
     per_device_eval_batch_size=4,   # batch size for evaluation
     warmup_steps=500,                # number of warmup steps for learning rate scheduler
