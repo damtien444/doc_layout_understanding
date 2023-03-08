@@ -24,7 +24,7 @@ os.environ['WANDB_API_KEY']="660c57d70a4424e5eea4d022af08716e197d2c6a"
 wandb.login()
 
 processor = LayoutLMv3Processor.from_pretrained(
-    "microsoft/layoutxlm-base",
+    "microsoft/layoutlmv3-base",
     apply_ocr=False,
     only_label_first_subword=False,
     is_split_into_words=True,
