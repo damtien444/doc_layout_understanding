@@ -67,8 +67,10 @@ def prepare_examples(examples):
 
 
 # we need to define custom features for `set_format` (used later on) to work properly
+# from datasets import Features, Sequence, ClassLabel, Value, Array2D, Array3D
+
 features = Features({
-    'image': Array3D(dtype="float32", shape=(3, 224, 224)),
+    'pixel_values': Array3D(dtype="float32", shape=(3, 224, 224)),
     'input_ids': Sequence(feature=Value(dtype='int64')),
     'attention_mask': Sequence(Value(dtype='int64')),
     'bbox': Array2D(dtype="int64", shape=(512, 4)),
