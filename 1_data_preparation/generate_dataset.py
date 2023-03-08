@@ -124,7 +124,9 @@ def data_preparing(question_output_path, input_with_ocr_anno, output_name='annot
 
 
 if __name__ == "__main__":
-    question_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/3_annotated_samples/output_1/questions"
-    ocr_pipeline_input = "/home/tiendq/Desktop/DocRec/2_data_preparation/3_annotated_samples/output_1/pipeline_annos_dcu_inf_v4.0.0.json"
+    # question_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/3_annotated_samples/output_1/questions"
+    question_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/dcu_layout_model_output/questions"
+    # ocr_pipeline_input = "/home/tiendq/Desktop/DocRec/2_data_preparation/3_annotated_samples/output_1/pipeline_annos_dcu_inf_v4.0.0.json"
+    ocr_pipeline_input = "/home/tiendq/Desktop/DocRec/2_data_preparation/4_test_data/pipeline_annos_dcu_inf_v5.0.0.json"
 
     data_preparing(question_folder, ocr_pipeline_input)

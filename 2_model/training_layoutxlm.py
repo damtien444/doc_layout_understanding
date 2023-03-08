@@ -98,17 +98,18 @@ model = LayoutLMv2ForTokenClassification.from_pretrained(
 
 metric = load_metric("seqeval")
 
-def compute_metrics(p):
+
+def compute_metrics(p, _torch_dataset=torch_dataset):
     predictions, labels = p
     predictions = np.argmax(predictions, axis=2)
 
     # Remove ignored index (special tokens)
     true_predictions = [
-        ["I-"+torch_dataset.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+        ["I-" + _torch_dataset.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
     true_labels = [
-        ["I-"+torch_dataset.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+        ["I-" + _torch_dataset.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
 
@@ -120,11 +121,11 @@ def compute_metrics(p):
         if key in no_flatten:
             continue
         to_be_flatten.append(key)
-    
+
     for key in to_be_flatten:
         val = results[key]
         for metr, value in val.items():
-            results[key+"_"+metr] = value
+            results[key + "_" + metr] = value
         del results[key]
 
     return results

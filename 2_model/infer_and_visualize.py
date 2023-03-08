@@ -1,3 +1,7 @@
+import json
+import os
+import textwrap
+
 from transformers import LayoutXLMProcessor, LayoutLMv2ForTokenClassification
 from data_loader_coco_image import DocumentLayoutAnalysisDataset, unnormalize_bbox, color_map
 import torch
@@ -53,13 +57,15 @@ processor = LayoutXLMProcessor.from_pretrained(
 # anno_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/0_data_repository/1000DataForOCR_fineLabel_dataset_coco.json"
 # image_root_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
 # torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
+model_root_ques_dir = '/home/tiendq/Desktop/DocRec/2_data_preparation/dcu_layout_model_output/questions'
+no_model_root_ques_dir = '/home/tiendq/Desktop/DocRec/2_data_preparation/dcu_layout_no_model_output/questions'
 
-anno_file = "/home/tiendq/Desktop/DocRec/2_data_preparation/4_test_data/coco_annotations_v5.0.0.json"
+anno_file = "/home/tiendq/Desktop/DocRec/2_data_preparation/4_test_data/annotated_input_coco.json"
 image_root_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/4_test_data/images"
 torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file, has_label=False)
 
 model = LayoutLMv2ForTokenClassification.from_pretrained(
-    '/home/tiendq/Desktop/DocRec/3_model_checkpoint/0_model_repository',
+    '/home/tiendq/Desktop/DocRec/3_model_checkpoint/GPU-4_0_model_repository/2_30ep_8bs_noWDecay',
     num_labels=len(torch_dataset.label_list),
     id2label=torch_dataset.id2label,
     label2id=torch_dataset.label2id)
@@ -92,15 +98,17 @@ def mouse_click(event, x, y, flags, *param):
         # print a line of token with corressponding colors
 
 
-from PIL import Image
+from PIL import Image, ImageFont, ImageDraw
 
 image_column_name = "image"
 text_column_name = "words"
 boxes_column_name = "boxes"
 label_column_name = "labels_id"
 
-for i in range(len(torch_dataset)):
-    examples = torch_dataset[i]
+key = 0
+k = 0
+while True:
+    examples = torch_dataset[k]
 
     images = Image.open(examples['image_path']).convert("RGB")
     words = examples[text_column_name]
@@ -139,7 +147,7 @@ for i in range(len(torch_dataset)):
     start = time.time()
     with torch.no_grad():
         outputs = model(**encoding)
-    infer_time = time.time()-start
+    infer_time = time.time() - start
     print("Infer time:", infer_time)
 
     # The model outputs logits of shape (batch_size, seq_len, num_labels).
@@ -199,4 +207,79 @@ for i in range(len(torch_dataset)):
     cv2.imshow("Image with Annotations", image)
     cv2.setMouseCallback("Image with Annotations", mouse_click, (instance_dict, width, height))
 
-    cv2.waitKey(0)
+    file_name = examples['image_path'].split('/')[-1] + ".json"
+
+    try:
+        with open(model_root_ques_dir + os.sep + file_name) as f:
+            data = json.load(f)
+
+        with open('model_temp.json', 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+        with open(no_model_root_ques_dir + os.sep + file_name) as f:
+            data = json.load(f)
+
+        with open('no_model_temp.json', 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+    except:
+        pass
+
+    print(file_name)
+
+    # font_file = "/home/tiendq/Downloads/Noto_Sans/NotoSans-ExtraLight.ttf"
+    # font_size = 16
+    # img_size = (800, 600)
+    #
+    # try:
+    #     with open(root_ques_dir+os.sep+file_name) as f:
+    #         data = json.load(f)
+    #
+    #     json_str = json.dumps(data, indent=4)
+    #     lines = json_str.split('\n')
+    #
+    #     img = np.zeros(img_size + (3,), dtype=np.uint8)
+    #
+    #     # Define the font object
+    #     font = ImageFont.truetype(font_file, font_size)
+    #
+    #     # Define the starting x and y positions
+    #     x_pos = 50
+    #     y_pos = 50
+    #
+    #     # Loop through each item in the dictionary and draw it on the image
+    #     for line in lines:
+    #         # Format the key-value pair string with new lines
+    #         text = line
+    #
+    #         sub_lines = textwrap.wrap(text, width=60)
+    #         for _line in sub_lines:
+    #
+    #         # Create a PIL image from the cv2 numpy array
+    #             pil_img = Image.fromarray(img)
+    #
+    #             # Draw the text on the PIL image using the defined font and position
+    #             draw = ImageDraw.Draw(pil_img)
+    #             draw.text((x_pos, y_pos), _line, (255, 255, 255), font=font)
+    #
+    #             # Convert the PIL image back to a cv2 numpy array
+    #             img = np.array(pil_img)
+    #
+    #             # Increment the y-position for the next line
+    #             y_pos += font_size
+    #
+    #     # Show the resulting image in a window
+    #     cv2.imshow('JSON Content', img)
+    # except:
+    #     print("no json")
+
+    key = cv2.waitKey(0)
+
+    if key == ord('a'):
+        k += 1
+    elif key == ord('s'):
+        k -= 1
+    elif key == 27:  # ESC key
+        cv2.destroyAllWindows()
+        break
+
+    # cv2.waitKey(0)
