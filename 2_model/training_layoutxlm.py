@@ -105,7 +105,12 @@ def highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator, ov
     return _labels
 
 
-containing_indicator = [torch_dataset.label2id[label] for label in ['heading', 'title', 'answer', 'super_title']]
+containing_indicator = [torch_dataset.label2id[label] for label in [
+                                                                    # 'heading',
+                                                                    'title',
+                                                                    'answer',
+                                                                    'super_title'
+]]
 
 
 def prepare_examples(examples):
