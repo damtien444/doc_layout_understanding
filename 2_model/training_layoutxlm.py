@@ -50,8 +50,10 @@ def to_dataset():
         yield torch_dataset[i]
 
 
-anno_file = "0_data_repository/v1.1_title_and_supertitle_mis_define/instances_default.json"
-image_root_folder = "0_data_repository/2_selected_sample"
+# anno_file = "0_data_repository/v1.1_title_and_supertitle_mis_define/instances_default.json"
+# image_root_folder = "0_data_repository/2_selected_sample"
+anno_file = "/kaggle/input/vietnamese-exam-doc-layout-annotations/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
+image_root_folder = "/kaggle/input/vietnamese-exam-doc-layout/2_selected_sample"
 torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
 ds = Dataset.from_generator(to_dataset)
 ds = ds.train_test_split(test_size=0.2, shuffle=True)
