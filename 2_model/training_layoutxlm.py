@@ -28,7 +28,7 @@ final_indicator = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|100
 # # limit numpy thread for not over gaining CPU consumption
 # os.environ['OMP_NUM_THREADS']='4'
 
-os.environ['WANDB_PROJECT']="layoutlxlm"
+os.environ['WANDB_PROJECT']="layoutxlm"
 os.environ['WANDB_NOTEBOOK_NAME']="LayoutXLM for document layout analysis kaggle"
 os.environ['WANDB_API_KEY']="660c57d70a4424e5eea4d022af08716e197d2c6a"
 
