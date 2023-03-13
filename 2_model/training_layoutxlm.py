@@ -21,12 +21,16 @@ final_indicator = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|100
                   r"1-9][0-9]?[0-9]?)[\\.,:;)]?)|(^([A-Z][\\.,)])|^([a-z][\\.,)])|^([1-9]+[\\.,)])|^(\\{?\\math(" \
                   r"rm|bf|bb)((\\{~?[A-Z][\\.,])~?\\}|(\\{~?[A-Z]~?\\})[\\.,])))"
 
-# project name send to wandb
-os.environ['WANDB_PROJECT']="layoutxlm"
-# set cuda device use for training
-os.environ['CUDA_VISIBLE_DEVICES']='1'
-# limit numpy thread for not over gaining CPU consumption 
-os.environ['OMP_NUM_THREADS']='4'
+# # project name send to wandb
+# os.environ['WANDB_PROJECT']="layoutxlm"
+# # set cuda device use for training
+# os.environ['CUDA_VISIBLE_DEVICES']='1'
+# # limit numpy thread for not over gaining CPU consumption
+# os.environ['OMP_NUM_THREADS']='4'
+
+os.environ['WANDB_PROJECT']="layoutlmv3"
+os.environ['WANDB_NOTEBOOK_NAME']="LayoutV3 for document layout analysis colab"
+os.environ['WANDB_API_KEY']="660c57d70a4424e5eea4d022af08716e197d2c6a"
 
 wandb.login()
 
