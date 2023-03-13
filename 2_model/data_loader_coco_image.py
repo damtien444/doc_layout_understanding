@@ -21,7 +21,8 @@ color_map = {
     'starting': ((211,63,69), "light_red")  # Black
 }
 
-label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting']
+label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting',
+              'indicator']
 
 
 def normalize_bbox(bbox, width, height):
