@@ -23,7 +23,7 @@ color_map = {
 }
 
 label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting',
-              'indicator']
+              'indicator_answer', 'indicator_title', 'indicator_super_title']
 
 
 def normalize_bbox(bbox, width, height):
