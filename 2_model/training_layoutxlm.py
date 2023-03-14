@@ -1,3 +1,5 @@
+import copy
+
 from PIL import Image
 from transformers import LayoutXLMProcessor
 from datasets import Dataset
@@ -11,7 +13,8 @@ import wandb
 import os
 import re
 
-label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting', 'indicator']
+label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting',
+              'indicator_answer', 'indicator_title', 'indicator_super_title']
 
 label2id = {label: idx for idx, label in enumerate(label_list)}
 id2label = {idx: label for idx, label in enumerate(label_list)}
@@ -28,9 +31,9 @@ final_indicator = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|100
 # # limit numpy thread for not over gaining CPU consumption
 # os.environ['OMP_NUM_THREADS']='4'
 
-os.environ['WANDB_PROJECT']="layoutxlm"
-os.environ['WANDB_NOTEBOOK_NAME']="LayoutXLM for document layout analysis kaggle"
-os.environ['WANDB_API_KEY']="660c57d70a4424e5eea4d022af08716e197d2c6a"
+os.environ['WANDB_PROJECT'] = "layoutxlm"
+os.environ['WANDB_NOTEBOOK_NAME'] = "LayoutXLM for document layout analysis kaggle"
+os.environ['WANDB_API_KEY'] = "660c57d70a4424e5eea4d022af08716e197d2c6a"
 
 wandb.login()
 
@@ -46,7 +49,7 @@ processor = LayoutXLMProcessor.from_pretrained(
 
 def to_dataset():
     for i in range(len(torch_dataset)):
-    # for i in range(10):
+        # for i in range(10):
         yield torch_dataset[i]
 
 
@@ -65,10 +68,9 @@ text_column_name = "words"
 boxes_column_name = "boxes"
 label_column_name = "labels_id"
 
-
 def highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator, overflow_to_sample_mapping,
-                        offset_mapping, label2id, _labels):
-    # done: refactor this part to a separate function
+                        offset_mapping, label2id, _labels, lock_visit):
+    # todo: refactor this part to a separate function
     # find_match_and_update(visited_boxes, prev_box,)
     # tim indicator cua original_words cua prev_box
 
@@ -78,39 +80,47 @@ def highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator, ov
     # https://huggingface.co/transformers/v4.2.2/custom_datasets.html#:~:text=Let%E2%80%99s%20write%20a%20function%20to%20do,%5BPAD%5D%20or%20%5BCLS%5D.
 
     # sau đó update _labels tuong ung
+    if tup_prev_box in lock_visit:
+        return _labels
+
     prev_original_words = visited_boxes[tup_prev_box]['original_words']
 
     matches = re.search(final_indicator, prev_original_words)
     if matches is None:
         return _labels
 
-    match_start_idx = matches.start(0)
-    match_end_idx = matches.end(0)
+    match_span = matches.span()
 
-    if isinstance(match_start_idx, list):
-        match_start_idx = match_start_idx[0]
-        match_end_idx = match_end_idx[0]
+    match_start_idx = match_span[0]
+    match_end_idx = match_span[1]
+
+    box_type = visited_boxes[tup_prev_box]['box_type']
+
+    # if isinstance(match_start_idx, list):
+    #     match_start_idx = match_start_idx[0]
+    #     match_end_idx = match_end_idx[0]
 
     # tim token co range trong start and end
     batch_pos = overflow_to_sample_mapping[prev_i]
     offset_mapping_interested = offset_mapping[batch_pos][
                                 visited_boxes[tup_prev_box]['start_idx']:visited_boxes[tup_prev_box]['end_idx']]
-
+    # if prev_original_words.startswith('Câu'):
+    #     print("hehe")
     for idx, token_span in enumerate(offset_mapping_interested):
-        if match_start_idx <= token_span[0] and token_span[1] <= match_end_idx:
-            _labels[batch_pos][visited_boxes[tup_prev_box]['start_idx'] + idx] = label2id['indicator']
-        elif token_span[0] > match_end_idx:
-            break
+        if (match_start_idx <= token_span[0]) and (token_span[1] <= match_end_idx):
+            _labels[batch_pos][visited_boxes[tup_prev_box]['start_idx'] + idx] = label2id[
+                'indicator_' + id2label[box_type]]
+        # elif token_span[0] > match_end_idx:
+        #     break
+
+    # print(prev_original_words, _labels[batch_pos][visited_boxes[tup_prev_box]['start_idx']:visited_boxes[
+    # tup_prev_box]['end_idx']], sep="\n", end="\n----------------\n")
+    lock_visit.add(tup_prev_box)
 
     return _labels
 
 
-containing_indicator = [torch_dataset.label2id[label] for label in [
-                                                                    # 'heading',
-                                                                    'title',
-                                                                    # 'answer',
-                                                                    'super_title'
-]]
+containing_indicator = [torch_dataset.label2id[label] for label in ['title', 'answer', 'super_title']]
 
 
 def prepare_examples(examples):
@@ -119,54 +129,80 @@ def prepare_examples(examples):
     boxes = examples[boxes_column_name]
     word_labels = examples[label_column_name]
 
-    encoding = processor(images, words, boxes=boxes, word_labels=word_labels, truncation=True, stride=128,
-                         padding="max_length", max_length=512, return_overflowing_tokens=True,
-                         return_offsets_mapping=True)
+    # encoding = processor(images, words, boxes=boxes, word_labels=word_labels, return_overflowing_tokens=True, return_offsets_mapping=True)
+    encoding = processor.tokenizer(words, boxes=boxes, word_labels=word_labels, return_overflowing_tokens=True,
+                                   return_offsets_mapping=True, clean_up_tokenization_spaces=True,
+                                   skip_special_tokens=True)
 
     offset_mapping = encoding.pop('offset_mapping')
     overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
 
     # _image = encoding['image']
     _token = encoding['input_ids']
+    _words = copy.deepcopy(_token)
+
+    for i in range(0, len(_token)):
+        for j in range(0, len(_token[i])):
+            _words[i][j] = processor.tokenizer.decode(_token[i][j], clean_up_tokenization_spaces=True,
+                                                      skip_special_tokens=True)
+
     _bbox = encoding['bbox']
     _labels = encoding['labels']
 
     visited_boxes = {}
+    lock_visit = set()
 
     prev_box = None
     prev_i = 0
     prev_j = 0
 
     for i in range(0, len(_bbox)):
+
         for j in range(0, len(_bbox[i])):
-            # for idx, box in enumerate(boxes):
+
             box = _bbox[i][j]
+
+            if box != prev_box and prev_box is not None:
+                tup_prev_box = tuple(prev_box)
+
+                visited_boxes[tup_prev_box]['end_idx'] = prev_j
+                _labels = highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator,
+                                              overflow_to_sample_mapping, offset_mapping, label2id, _labels, lock_visit)
+
+                # if prev_i != i:
+                #     visited_boxes = {}
+                #     lock_visit = set()
+
             if box == [0, 0, 0, 0] or box == [1000, 1000, 1000, 1000]:
-                # print(True)
                 continue
 
             if _labels[i][j] not in containing_indicator:
                 continue
-
-            if box != prev_box and prev_box is not None:
-                tup_prev_box = tuple(prev_box)
-                visited_boxes[tup_prev_box]['end_idx'] = prev_j
-                _labels = highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator,
-                                              overflow_to_sample_mapping, offset_mapping, label2id, _labels)
 
             prev_box = box
             prev_i = i
             prev_j = j
 
             if tuple(box) in visited_boxes:
-                visited_boxes[tuple(box)]['token_list'].append((_token[i][j], _labels[i][j], i, j))
+                visited_boxes[tuple(box)]['token_list'].append(
+                    (_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j])))
                 continue
 
-            visited_boxes[tuple(box)] = {'token_list': [(_token[i][j], _labels[i][j], i, j)],
-                                         "original_words": words[overflow_to_sample_mapping[i]][
-                                             encoding.token_to_word(i, j)],
-                                         "start_idx": j
-                                         }
+            visited_boxes[tuple(box)] = {
+                'token_list': [(_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j]))],
+                "original_words": words[overflow_to_sample_mapping[i]][encoding.token_to_word(i, j)],
+                "start_idx": j,
+                "box_type": _labels[i][j]
+            }
+
+    print("finish relabel!")
+
+    encoding = processor(images, _words, boxes=_bbox, word_labels=_labels, truncation=True, stride=128,
+                         padding="max_length", max_length=512, return_overflowing_tokens=True,
+                         return_offsets_mapping=True)
+
+    offset_mapping = encoding.pop('offset_mapping')
+    overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
 
     return encoding
 
@@ -193,17 +229,14 @@ eval_dataset = ds["test"].map(
     features=features,
 )
 
-
 train_dataset.set_format("torch")
 eval_dataset.set_format("torch")
-
 
 model = LayoutLMv2ForTokenClassification.from_pretrained(
     'microsoft/layoutxlm-base',
     num_labels=len(torch_dataset.label_list),
     id2label=torch_dataset.id2label,
     label2id=torch_dataset.label2id)
-
 
 metric = load_metric("seqeval")
 
@@ -247,41 +280,40 @@ def compute_metrics(p, _torch_dataset=torch_dataset):
 
 
 import warnings
-warnings.filterwarnings("ignore")
 
+warnings.filterwarnings("ignore")
 
 from transformers import Trainer, TrainingArguments
 from transformers.data.data_collator import default_data_collator
 
-
-checkpoint_dir="0_model_repository/1_update_titleandsupertitlemismatch"
+checkpoint_dir = "0_model_repository/1_update_titleandsupertitlemismatch"
 training_args = TrainingArguments(
-    output_dir=checkpoint_dir,          # output directory
-    num_train_epochs=30,              # total number of training epochs
+    output_dir=checkpoint_dir,  # output directory
+    num_train_epochs=30,  # total number of training epochs
     per_device_train_batch_size=4,  # batch size per device during training
-    per_device_eval_batch_size=4,   # batch size for evaluation
-    warmup_steps=500,                # number of warmup steps for learning rate scheduler
+    per_device_eval_batch_size=4,  # batch size for evaluation
+    warmup_steps=500,  # number of warmup steps for learning rate scheduler
     weight_decay=0.01,
     learning_rate=3e-5,
     evaluation_strategy="steps",
-    eval_steps=500,              # strength of weight decay
-    logging_dir=f'{checkpoint_dir}/logs',            # directory for storing logs
+    eval_steps=500,  # strength of weight decay
+    logging_dir=f'{checkpoint_dir}/logs',  # directory for storing logs
     logging_steps=500,
     load_best_model_at_end=True,
     metric_for_best_model="overall_f1",
     resume_from_checkpoint=False,
     greater_is_better=True,
     save_total_limit=3,
-    
+
 )
 
 trainer = Trainer(
-    model=model,                         # the instantiated 🤗 Transformers model to be trained
-    args=training_args,                  # training arguments, defined above
-    train_dataset=train_dataset,         # training dataset
+    model=model,  # the instantiated 🤗 Transformers model to be trained
+    args=training_args,  # training arguments, defined above
+    train_dataset=train_dataset,  # training dataset
     eval_dataset=eval_dataset,
     data_collator=default_data_collator,
-    compute_metrics=compute_metrics,             # evaluation dataset
+    compute_metrics=compute_metrics,  # evaluation dataset
 
 )
 
