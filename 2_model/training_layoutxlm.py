@@ -108,7 +108,7 @@ def highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator, ov
 containing_indicator = [torch_dataset.label2id[label] for label in [
                                                                     # 'heading',
                                                                     'title',
-                                                                    'answer',
+                                                                    # 'answer',
                                                                     'super_title'
 ]]
 

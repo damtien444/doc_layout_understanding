@@ -10,15 +10,16 @@ from pycocotools.coco import COCO
 from PIL import Image, ImageDraw
 
 color_map = {
-    'title': ((148, 102, 168), "magenta"),  # Purple
-    'explanation': ((6, 206, 211), "light_cyan"),  # Green
+    'title': ((255, 0, 255), "magenta"),  # Purple
+    'explanation': ((0, 139, 139), "light_cyan"),  # Green
     'answer': ((236, 126, 237), "light_magenta"),  # Yellow
     'super_title': ((72, 189, 27), "light_green"),  # Gray 1
     'header': ((124, 125, 121), "light_grey"),  # Gray 2
     'footer': ((82, 82, 82), "dark_grey"),  # Gray 3
     'ending': ((192, 184, 13), 'light_yellow'),  # Red
     'heading': ((33,169,252), "light_blue"),  # Blue
-    'starting': ((211,63,69), "light_red")  # Black
+    'starting': ((211,63,69), "light_red"),
+    'indicator': ((0, 0, 139), "blue")
 }
 
 label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting',
