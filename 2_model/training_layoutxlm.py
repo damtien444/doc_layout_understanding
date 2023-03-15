@@ -3,7 +3,7 @@ import copy
 from PIL import Image
 from transformers import LayoutXLMProcessor
 from datasets import Dataset
-from data_loader_coco_image import DocumentLayoutAnalysisDataset
+from data_loader_coco_image import DocumentLayoutAnalysisDataset, label_list
 from datasets import Features, Sequence, ClassLabel, Value, Array2D, Array3D
 from transformers import LayoutLMv2ForTokenClassification
 import numpy as np
@@ -13,8 +13,6 @@ import wandb
 import os
 import re
 
-label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting',
-              'indicator_answer', 'indicator_title', 'indicator_super_title']
 
 label2id = {label: idx for idx, label in enumerate(label_list)}
 id2label = {idx: label for idx, label in enumerate(label_list)}
@@ -68,7 +66,7 @@ text_column_name = "words"
 boxes_column_name = "boxes"
 label_column_name = "labels_id"
 
-def highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator, overflow_to_sample_mapping,
+def highlight_indicator(prev_i, visited_boxes, box_id, final_indicator, overflow_to_sample_mapping,
                         offset_mapping, label2id, _labels, lock_visit):
     # todo: refactor this part to a separate function
     # find_match_and_update(visited_boxes, prev_box,)
@@ -80,10 +78,10 @@ def highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator, ov
     # https://huggingface.co/transformers/v4.2.2/custom_datasets.html#:~:text=Let%E2%80%99s%20write%20a%20function%20to%20do,%5BPAD%5D%20or%20%5BCLS%5D.
 
     # sau đó update _labels tuong ung
-    if tup_prev_box in lock_visit:
+    if box_id in lock_visit:
         return _labels
 
-    prev_original_words = visited_boxes[tup_prev_box]['original_words']
+    prev_original_words = visited_boxes[box_id]['original_words']
 
     matches = re.search(final_indicator, prev_original_words)
     if matches is None:
@@ -94,7 +92,7 @@ def highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator, ov
     match_start_idx = match_span[0]
     match_end_idx = match_span[1]
 
-    box_type = visited_boxes[tup_prev_box]['box_type']
+    box_type = visited_boxes[box_id]['box_type']
 
     # if isinstance(match_start_idx, list):
     #     match_start_idx = match_start_idx[0]
@@ -103,19 +101,19 @@ def highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator, ov
     # tim token co range trong start and end
     batch_pos = overflow_to_sample_mapping[prev_i]
     offset_mapping_interested = offset_mapping[batch_pos][
-                                visited_boxes[tup_prev_box]['start_idx']:visited_boxes[tup_prev_box]['end_idx']]
+                                visited_boxes[box_id]['start_idx']:visited_boxes[box_id]['end_idx']]
     # if prev_original_words.startswith('Câu'):
     #     print("hehe")
     for idx, token_span in enumerate(offset_mapping_interested):
         if (match_start_idx <= token_span[0]) and (token_span[1] <= match_end_idx):
-            _labels[batch_pos][visited_boxes[tup_prev_box]['start_idx'] + idx] = label2id[
+            _labels[batch_pos][visited_boxes[box_id]['start_idx'] + idx] = label2id[
                 'indicator_' + id2label[box_type]]
         # elif token_span[0] > match_end_idx:
         #     break
 
     # print(prev_original_words, _labels[batch_pos][visited_boxes[tup_prev_box]['start_idx']:visited_boxes[
     # tup_prev_box]['end_idx']], sep="\n", end="\n----------------\n")
-    lock_visit.add(tup_prev_box)
+    lock_visit.add(box_id)
 
     return _labels
 
@@ -155,6 +153,9 @@ def prepare_examples(examples):
     prev_box = None
     prev_i = 0
     prev_j = 0
+    prev_id = None
+
+    # ids = []
 
     for i in range(0, len(_bbox)):
 
@@ -162,11 +163,14 @@ def prepare_examples(examples):
 
             box = _bbox[i][j]
 
-            if box != prev_box and prev_box is not None:
-                tup_prev_box = tuple(prev_box)
+            # ids.append(str(i) + "_" + str(encoding.token_to_word(i, j)))
+            _id = (i, encoding.token_to_word(i, j))
 
-                visited_boxes[tup_prev_box]['end_idx'] = prev_j
-                _labels = highlight_indicator(prev_i, visited_boxes, tup_prev_box, final_indicator,
+            if _id != prev_id and prev_id is not None:
+                # tup_prev_box = tuple(prev_box)
+
+                visited_boxes[prev_id]['end_idx'] = prev_j
+                _labels = highlight_indicator(prev_i, visited_boxes, prev_id, final_indicator,
                                               overflow_to_sample_mapping, offset_mapping, label2id, _labels, lock_visit)
 
                 # if prev_i != i:
@@ -180,20 +184,21 @@ def prepare_examples(examples):
                 continue
 
             prev_box = box
+            prev_id = _id
             prev_i = i
             prev_j = j
 
-            if tuple(box) in visited_boxes:
-                visited_boxes[tuple(box)]['token_list'].append(
+            if _id in visited_boxes:
+                visited_boxes[_id]['token_list'].append(
                     (_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j])))
                 continue
 
-            visited_boxes[tuple(box)] = {
+            visited_boxes[_id] = {
                 'token_list': [(_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j]))],
                 "original_words": words[overflow_to_sample_mapping[i]][encoding.token_to_word(i, j)],
                 "start_idx": j,
                 "box_type": _labels[i][j]
-            }
+                }
 
     print("finish relabel!")
 
@@ -205,7 +210,6 @@ def prepare_examples(examples):
     overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
 
     return encoding
-
 
 # we need to define custom features for `set_format` (used later on) to work properly
 features = Features({
