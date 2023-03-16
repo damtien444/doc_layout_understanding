@@ -47,7 +47,7 @@ final_expression = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|10
 os.environ['WANDB_PROJECT'] = "layoutxlm"
 os.environ['WANDB_NOTEBOOK_NAME'] = "LayoutXLM for document layout analysis kaggle"
 os.environ['WANDB_API_KEY'] = "660c57d70a4424e5eea4d022af08716e197d2c6a"
-with_indicator = True
+with_indicator = False
 wandb.login()
 
 processor = LayoutXLMProcessor.from_pretrained(
