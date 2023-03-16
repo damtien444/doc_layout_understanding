@@ -145,7 +145,7 @@ def majority_voting_label(token_list, skip_indicator=True):
             return vote
 
 
-def prepare_examples(examples, with_indicator=True):
+def prepare_examples(examples, with_indicator=False):
     images = [Image.open(path).convert("RGB") for path in examples['image_path']]
     words = examples[text_column_name]
     boxes = examples[boxes_column_name]
