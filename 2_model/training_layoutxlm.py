@@ -18,11 +18,21 @@ from transformers import Trainer, TrainingArguments
 from transformers.data.data_collator import default_data_collator
 from datasets import concatenate_datasets
 
+indicator_list = ['indicator_answer', 'indicator_title', 'indicator_super_title']
+replacement_indicator = ['answer', 'title', 'super_title']
 label2id = {label: idx for idx, label in enumerate(label_list)}
 id2label = {idx: label for idx, label in enumerate(label_list)}
+indicator_ids = [label2id[label] for label in indicator_list]
+replacement_ids = [label2id[label] for label in replacement_indicator]
+indicatorid2replacementid = {indicator_id: replacement_id for indicator_id, replacement_id in zip(indicator_ids, replacement_ids)}
+
 
 containing_indicator = [label2id[label] for label in ['title', 'answer', 'super_title']]
-final_indicator = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|1000|(?=[MDCLXVI])M*(C[MD]|D?C*)(X[CL]|L?X*)(" \
+
+title_expression = r'(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|1000|(?=[MDCLXVI])M*(C[MD]|D?C*)(X[CL]|L?X*)' \
+                   r'(I[XV]|V?I*))[\\.,:;]?( \\(\\d([\\.,]\\d*?)? *?(điểm|đ)\\))?[\\.,:;]?)|(^(Question|Ouestion)' \
+                   r'(0|[1-9][0-9]?[0-9]?)[\\.,:;)]?)'
+final_expression = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|1000|(?=[MDCLXVI])M*(C[MD]|D?C*)(X[CL]|L?X*)(" \
                   r"I[XV]|V?I*))[\\.,:;]?( \\(\\d([\\.,]\\d*?)? *?(điểm|đ)\\))?[\\.,:;]?)|(^(Question|Ouestion) (0|[" \
                   r"1-9][0-9]?[0-9]?)[\\.,:;)]?)|(^([A-Z][\\.,)])|^([a-z][\\.,)])|^([1-9]+[\\.,)])|^(\\{?\\math(" \
                   r"rm|bf|bb)((\\{~?[A-Z][\\.,])~?\\}|(\\{~?[A-Z]~?\\})[\\.,])))"
@@ -72,8 +82,15 @@ def highlight_indicator(prev_i, visited_boxes, box_id, final_indicator, overflow
         return _labels
 
     prev_original_words = visited_boxes[box_id]['original_words']
+    box_type = visited_boxes[box_id]['box_type']
 
-    matches = re.search(final_indicator, prev_original_words)
+    # indicator của box loại nào thì bỏ vào loại đó
+    if box_type == label2id['title']:
+        expression = title_expression
+    else:
+        expression = final_expression
+
+    matches = re.search(expression, prev_original_words)
     if matches is None:
         return _labels
 
@@ -82,7 +99,6 @@ def highlight_indicator(prev_i, visited_boxes, box_id, final_indicator, overflow
     match_start_idx = match_span[0]
     match_end_idx = match_span[1]
 
-    box_type = visited_boxes[box_id]['box_type']
 
     # if isinstance(match_start_idx, list):
     #     match_start_idx = match_start_idx[0]
@@ -92,14 +108,12 @@ def highlight_indicator(prev_i, visited_boxes, box_id, final_indicator, overflow
     batch_pos = overflow_to_sample_mapping[prev_i]
     offset_mapping_interested = offset_mapping[batch_pos][
                                 visited_boxes[box_id]['start_idx']:visited_boxes[box_id]['end_idx']]
-    # if prev_original_words.startswith('Câu'):
-    #     print("hehe")
+
     for idx, token_span in enumerate(offset_mapping_interested):
         if (match_start_idx <= token_span[0]) and (token_span[1] <= match_end_idx):
             _labels[batch_pos][visited_boxes[box_id]['start_idx'] + idx] = label2id[
                 'indicator_' + id2label[box_type]]
-        # elif token_span[0] > match_end_idx:
-        #     break
+
 
     # print(prev_original_words, _labels[batch_pos][visited_boxes[tup_prev_box]['start_idx']:visited_boxes[
     # tup_prev_box]['end_idx']], sep="\n", end="\n----------------\n")
@@ -108,7 +122,27 @@ def highlight_indicator(prev_i, visited_boxes, box_id, final_indicator, overflow
     return _labels
 
 
+def majority_voting_label(token_list, skip_indicator=True):
+    # def majority_vote(l):
+    vote_counts = {}
+    for token in token_list:
+        if token[1] in indicator_ids and skip_indicator:
+            vote = indicatorid2replacementid[token[1]]
+            # continue
+        else:
+            vote = token[1]
+        if vote in vote_counts.keys():
+            vote_counts[vote] += 1
+        else:
+            vote_counts[vote] = 1
 
+    # winners = []
+    max_count = max(vote_counts.values())
+    for vote, count in vote_counts.items():
+        if count == max_count:
+            # winners.append(vote)
+
+            return vote
 
 
 def prepare_examples(examples):
@@ -160,7 +194,8 @@ def prepare_examples(examples):
                 # tup_prev_box = tuple(prev_box)
 
                 visited_boxes[prev_id]['end_idx'] = prev_j
-                _labels = highlight_indicator(prev_i, visited_boxes, prev_id, final_indicator,
+                visited_boxes[prev_id]['box_type'] = majority_voting_label(visited_boxes[prev_id]['token_list'], skip_indicator=True)
+                _labels = highlight_indicator(prev_i, visited_boxes, prev_id, final_expression,
                                               overflow_to_sample_mapping, offset_mapping, label2id, _labels, lock_visit)
 
                 # if prev_i != i:
@@ -187,7 +222,6 @@ def prepare_examples(examples):
                 'token_list': [(_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j]))],
                 "original_words": words[overflow_to_sample_mapping[i]][encoding.token_to_word(i, j)],
                 "start_idx": j,
-                "box_type": _labels[i][j]
                 }
 
     print("finish relabel!")
