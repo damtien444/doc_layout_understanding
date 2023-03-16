@@ -47,7 +47,7 @@ final_expression = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|10
 os.environ['WANDB_PROJECT'] = "layoutxlm"
 os.environ['WANDB_NOTEBOOK_NAME'] = "LayoutXLM for document layout analysis kaggle"
 os.environ['WANDB_API_KEY'] = "660c57d70a4424e5eea4d022af08716e197d2c6a"
-
+with_indicator = True
 wandb.login()
 
 processor = LayoutXLMProcessor.from_pretrained(
@@ -145,7 +145,7 @@ def majority_voting_label(token_list, skip_indicator=True):
             return vote
 
 
-def prepare_examples(examples, with_indicator=False):
+def prepare_examples(examples, with_indicator=with_indicator):
     images = [Image.open(path).convert("RGB") for path in examples['image_path']]
     words = examples[text_column_name]
     boxes = examples[boxes_column_name]
