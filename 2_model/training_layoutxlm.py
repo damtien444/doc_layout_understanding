@@ -145,7 +145,7 @@ def majority_voting_label(token_list, skip_indicator=True):
             return vote
 
 
-def prepare_examples(examples):
+def prepare_examples(examples, with_indicator=True):
     images = [Image.open(path).convert("RGB") for path in examples['image_path']]
     words = examples[text_column_name]
     boxes = examples[boxes_column_name]
@@ -158,80 +158,80 @@ def prepare_examples(examples):
 
     offset_mapping = encoding.pop('offset_mapping')
     overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
+    if with_indicator:
+        # _image = encoding['image']
+        _token = encoding['input_ids']
+        _words = copy.deepcopy(_token)
 
-    # _image = encoding['image']
-    _token = encoding['input_ids']
-    _words = copy.deepcopy(_token)
+        for i in range(0, len(_token)):
+            for j in range(0, len(_token[i])):
+                _words[i][j] = processor.tokenizer.decode(_token[i][j], clean_up_tokenization_spaces=True,
+                                                          skip_special_tokens=True)
 
-    for i in range(0, len(_token)):
-        for j in range(0, len(_token[i])):
-            _words[i][j] = processor.tokenizer.decode(_token[i][j], clean_up_tokenization_spaces=True,
-                                                      skip_special_tokens=True)
+        _bbox = encoding['bbox']
+        _labels = encoding['labels']
 
-    _bbox = encoding['bbox']
-    _labels = encoding['labels']
+        visited_boxes = {}
+        lock_visit = set()
 
-    visited_boxes = {}
-    lock_visit = set()
+        prev_box = None
+        prev_i = 0
+        prev_j = 0
+        prev_id = None
 
-    prev_box = None
-    prev_i = 0
-    prev_j = 0
-    prev_id = None
+        # ids = []
 
-    # ids = []
+        for i in range(0, len(_bbox)):
 
-    for i in range(0, len(_bbox)):
+            for j in range(0, len(_bbox[i])):
 
-        for j in range(0, len(_bbox[i])):
+                box = _bbox[i][j]
 
-            box = _bbox[i][j]
+                # ids.append(str(i) + "_" + str(encoding.token_to_word(i, j)))
+                _id = (i, encoding.token_to_word(i, j))
 
-            # ids.append(str(i) + "_" + str(encoding.token_to_word(i, j)))
-            _id = (i, encoding.token_to_word(i, j))
+                if _id != prev_id and prev_id is not None:
+                    # tup_prev_box = tuple(prev_box)
 
-            if _id != prev_id and prev_id is not None:
-                # tup_prev_box = tuple(prev_box)
+                    visited_boxes[prev_id]['end_idx'] = prev_j
+                    visited_boxes[prev_id]['box_type'] = majority_voting_label(visited_boxes[prev_id]['token_list'], skip_indicator=True)
+                    _labels = highlight_indicator(prev_i, visited_boxes, prev_id, final_expression,
+                                                  overflow_to_sample_mapping, offset_mapping, label2id, _labels, lock_visit)
 
-                visited_boxes[prev_id]['end_idx'] = prev_j
-                visited_boxes[prev_id]['box_type'] = majority_voting_label(visited_boxes[prev_id]['token_list'], skip_indicator=True)
-                _labels = highlight_indicator(prev_i, visited_boxes, prev_id, final_expression,
-                                              overflow_to_sample_mapping, offset_mapping, label2id, _labels, lock_visit)
+                    # if prev_i != i:
+                    #     visited_boxes = {}
+                    #     lock_visit = set()
 
-                # if prev_i != i:
-                #     visited_boxes = {}
-                #     lock_visit = set()
+                if box == [0, 0, 0, 0] or box == [1000, 1000, 1000, 1000]:
+                    continue
 
-            if box == [0, 0, 0, 0] or box == [1000, 1000, 1000, 1000]:
-                continue
+                if _labels[i][j] not in containing_indicator:
+                    continue
 
-            if _labels[i][j] not in containing_indicator:
-                continue
+                prev_box = box
+                prev_id = _id
+                prev_i = i
+                prev_j = j
 
-            prev_box = box
-            prev_id = _id
-            prev_i = i
-            prev_j = j
+                if _id in visited_boxes:
+                    visited_boxes[_id]['token_list'].append(
+                        (_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j])))
+                    continue
 
-            if _id in visited_boxes:
-                visited_boxes[_id]['token_list'].append(
-                    (_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j])))
-                continue
+                visited_boxes[_id] = {
+                    'token_list': [(_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j]))],
+                    "original_words": words[overflow_to_sample_mapping[i]][encoding.token_to_word(i, j)],
+                    "start_idx": j,
+                    }
 
-            visited_boxes[_id] = {
-                'token_list': [(_token[i][j], _labels[i][j], i, j, processor.tokenizer.decode(_token[i][j]))],
-                "original_words": words[overflow_to_sample_mapping[i]][encoding.token_to_word(i, j)],
-                "start_idx": j,
-                }
+        print("finish relabel!")
 
-    print("finish relabel!")
+        encoding = processor(images, _words, boxes=_bbox, word_labels=_labels, truncation=True, stride=128,
+                             padding="max_length", max_length=512, return_overflowing_tokens=True,
+                             return_offsets_mapping=True)
 
-    encoding = processor(images, _words, boxes=_bbox, word_labels=_labels, truncation=True, stride=128,
-                         padding="max_length", max_length=512, return_overflowing_tokens=True,
-                         return_offsets_mapping=True)
-
-    offset_mapping = encoding.pop('offset_mapping')
-    overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
+        offset_mapping = encoding.pop('offset_mapping')
+        overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
 
     return encoding
 
