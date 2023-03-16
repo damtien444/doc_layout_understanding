@@ -238,10 +238,10 @@ def compute_metrics(p):
     #     "accuracy": results["overall_accuracy"],
     # }
 
-# anno_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/0_data_repository/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
-# image_root_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
-anno_file = "/kaggle/input/vietnamese-exam-doc-layout-annotations/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
-image_root_folder = "/kaggle/input/vietnamese-exam-doc-layout/2_selected_sample"
+anno_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/0_data_repository/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
+image_root_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
+# anno_file = "/kaggle/input/vietnamese-exam-doc-layout-annotations/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
+# image_root_folder = "/kaggle/input/vietnamese-exam-doc-layout/2_selected_sample"
 torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
 
 model = LayoutLMv2ForTokenClassification.from_pretrained(
@@ -257,6 +257,8 @@ warnings.filterwarnings("ignore")
 fold_num = 5
 
 ds = Dataset.from_generator(to_dataset)
+ds = ds.shuffle(seed=42)
+
 kfold = [ds.shard(fold_num, i, contiguous=True) for i in range(fold_num)]
 # ds = ds.train_test_split(test_size=0.2, shuffle=True)
 
