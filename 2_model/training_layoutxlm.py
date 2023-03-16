@@ -13,10 +13,15 @@ import wandb
 import os
 import re
 
+import warnings
+from transformers import Trainer, TrainingArguments
+from transformers.data.data_collator import default_data_collator
+from datasets import concatenate_datasets
 
 label2id = {label: idx for idx, label in enumerate(label_list)}
 id2label = {idx: label for idx, label in enumerate(label_list)}
 
+containing_indicator = [label2id[label] for label in ['title', 'answer', 'super_title']]
 final_indicator = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|1000|(?=[MDCLXVI])M*(C[MD]|D?C*)(X[CL]|L?X*)(" \
                   r"I[XV]|V?I*))[\\.,:;]?( \\(\\d([\\.,]\\d*?)? *?(điểm|đ)\\))?[\\.,:;]?)|(^(Question|Ouestion) (0|[" \
                   r"1-9][0-9]?[0-9]?)[\\.,:;)]?)|(^([A-Z][\\.,)])|^([a-z][\\.,)])|^([1-9]+[\\.,)])|^(\\{?\\math(" \
@@ -50,21 +55,6 @@ def to_dataset():
         # for i in range(10):
         yield torch_dataset[i]
 
-
-# anno_file = "0_data_repository/v1.1_title_and_supertitle_mis_define/instances_default.json"
-# image_root_folder = "0_data_repository/2_selected_sample"
-anno_file = "/kaggle/input/vietnamese-exam-doc-layout-annotations/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
-image_root_folder = "/kaggle/input/vietnamese-exam-doc-layout/2_selected_sample"
-torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
-ds = Dataset.from_generator(to_dataset)
-ds = ds.train_test_split(test_size=0.2, shuffle=True)
-
-features = ds["train"].features
-column_names = ds["train"].column_names
-image_column_name = "image"
-text_column_name = "words"
-boxes_column_name = "boxes"
-label_column_name = "labels_id"
 
 def highlight_indicator(prev_i, visited_boxes, box_id, final_indicator, overflow_to_sample_mapping,
                         offset_mapping, label2id, _labels, lock_visit):
@@ -118,7 +108,7 @@ def highlight_indicator(prev_i, visited_boxes, box_id, final_indicator, overflow
     return _labels
 
 
-containing_indicator = [torch_dataset.label2id[label] for label in ['title', 'answer', 'super_title']]
+
 
 
 def prepare_examples(examples):
@@ -211,51 +201,17 @@ def prepare_examples(examples):
 
     return encoding
 
-# we need to define custom features for `set_format` (used later on) to work properly
-features = Features({
-    'image': Array3D(dtype="float32", shape=(3, 224, 224)),
-    'input_ids': Sequence(feature=Value(dtype='int64')),
-    'attention_mask': Sequence(Value(dtype='int64')),
-    'bbox': Array2D(dtype="int64", shape=(512, 4)),
-    'labels': Sequence(feature=Value(dtype='int64')),
-})
-
-train_dataset = ds["train"].map(
-    prepare_examples,
-    batched=True,
-    remove_columns=column_names,
-    features=features,
-)
-eval_dataset = ds["test"].map(
-    prepare_examples,
-    batched=True,
-    remove_columns=column_names,
-    features=features,
-)
-
-train_dataset.set_format("torch")
-eval_dataset.set_format("torch")
-
-model = LayoutLMv2ForTokenClassification.from_pretrained(
-    'microsoft/layoutxlm-base',
-    num_labels=len(torch_dataset.label_list),
-    id2label=torch_dataset.id2label,
-    label2id=torch_dataset.label2id)
-
-metric = load_metric("seqeval")
-
-
-def compute_metrics(p, _torch_dataset=torch_dataset):
+def compute_metrics(p):
     predictions, labels = p
     predictions = np.argmax(predictions, axis=2)
 
     # Remove ignored index (special tokens)
     true_predictions = [
-        ["I-" + _torch_dataset.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+        ["I-" + label_list[p] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
     true_labels = [
-        ["I-" + _torch_dataset.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+        ["I-" + label_list[l] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
 
@@ -282,44 +238,93 @@ def compute_metrics(p, _torch_dataset=torch_dataset):
     #     "accuracy": results["overall_accuracy"],
     # }
 
+anno_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/0_data_repository/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
+image_root_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
+# anno_file = "/kaggle/input/vietnamese-exam-doc-layout-annotations/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
+# image_root_folder = "/kaggle/input/vietnamese-exam-doc-layout/2_selected_sample"
+torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
 
-import warnings
+model = LayoutLMv2ForTokenClassification.from_pretrained(
+    'microsoft/layoutxlm-base',
+    num_labels=len(label_list),
+    id2label=id2label,
+    label2id=label2id)
+
+metric = load_metric("seqeval")
 
 warnings.filterwarnings("ignore")
 
-from transformers import Trainer, TrainingArguments
-from transformers.data.data_collator import default_data_collator
+fold_num = 5
 
-checkpoint_dir = "0_model_repository/1_update_titleandsupertitlemismatch"
-training_args = TrainingArguments(
-    output_dir=checkpoint_dir,  # output directory
-    num_train_epochs=15,  # total number of training epochs
-    per_device_train_batch_size=4,  # batch size per device during training
-    per_device_eval_batch_size=4,  # batch size for evaluation
-    warmup_steps=500,  # number of warmup steps for learning rate scheduler
-    weight_decay=0.01,
-    learning_rate=3e-5,
-    evaluation_strategy="steps",
-    eval_steps=500,  # strength of weight decay
-    logging_dir=f'{checkpoint_dir}/logs',  # directory for storing logs
-    logging_steps=500,
-    load_best_model_at_end=True,
-    metric_for_best_model="overall_f1",
-    resume_from_checkpoint=False,
-    greater_is_better=True,
-    save_total_limit=3,
+ds = Dataset.from_generator(to_dataset)
+kfold = [ds.shard(fold_num, i, contiguous=True) for i in range(fold_num)]
+# ds = ds.train_test_split(test_size=0.2, shuffle=True)
 
-)
+features = ds.features
+column_names = ds.column_names
+image_column_name = "image"
+text_column_name = "words"
+boxes_column_name = "boxes"
+label_column_name = "labels_id"
 
-trainer = Trainer(
-    model=model,  # the instantiated 🤗 Transformers model to be trained
-    args=training_args,  # training arguments, defined above
-    train_dataset=train_dataset,  # training dataset
-    eval_dataset=eval_dataset,
-    data_collator=default_data_collator,
-    compute_metrics=compute_metrics,  # evaluation dataset
 
-)
+# we need to define custom features for `set_format` (used later on) to work properly
+features = Features({
+    'image': Array3D(dtype="float32", shape=(3, 224, 224)),
+    'input_ids': Sequence(feature=Value(dtype='int64')),
+    'attention_mask': Sequence(Value(dtype='int64')),
+    'bbox': Array2D(dtype="int64", shape=(512, 4)),
+    'labels': Sequence(feature=Value(dtype='int64')),
+})
 
-trainer.train()
-trainer.save_model()
+for idx_fold in range(fold_num):
+
+    fold_val = kfold[idx_fold]
+    fold_train = concatenate_datasets([kfold[i] for i in range(5) if i != idx_fold])
+
+    train_dataset = fold_train.map(
+        prepare_examples,
+        batched=True,
+        remove_columns=column_names,
+        features=features,
+    )
+    eval_dataset = fold_val.map(
+        prepare_examples,
+        batched=True,
+        remove_columns=column_names,
+        features=features,
+    )
+
+    train_dataset.set_format("torch")
+    eval_dataset.set_format("torch")
+
+    checkpoint_dir = "0_model_repository/1_update_titleandsupertitlemismatch"
+    training_args = TrainingArguments(
+        output_dir=checkpoint_dir,  # output directory
+        num_train_epochs=3,  # total number of training epochs
+        per_device_train_batch_size=4,  # batch size per device during training
+        per_device_eval_batch_size=4,  # batch size for evaluation
+        warmup_steps=30,  # number of warmup steps for learning rate scheduler
+        weight_decay=0.01,
+        learning_rate=5e-5,
+        evaluation_strategy="steps",
+        eval_steps=500,  # strength of weight decay
+        logging_dir=f'{checkpoint_dir}/logs',  # directory for storing logs
+        logging_steps=500,
+        load_best_model_at_end=True,
+        metric_for_best_model="overall_f1",
+        greater_is_better=True,
+        save_total_limit=3,
+    )
+
+    trainer = Trainer(
+        model=model,  # the instantiated 🤗 Transformers model to be trained
+        args=training_args,  # training arguments, defined above
+        train_dataset=train_dataset,  # training dataset
+        eval_dataset=eval_dataset,
+        data_collator=default_data_collator,
+        compute_metrics=compute_metrics,  # evaluation dataset
+    )
+
+    trainer.train()
+    trainer.save_model()

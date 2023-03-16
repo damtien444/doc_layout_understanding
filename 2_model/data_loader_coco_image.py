@@ -19,7 +19,9 @@ color_map = {
     'ending': ((192, 184, 13), 'light_yellow'),  # Red
     'heading': ((33,169,252), "light_blue"),  # Blue
     'starting': ((211,63,69), "light_red"),
-    'indicator': ((0, 0, 139), "blue")
+    'indicator_answer': ((0, 0, 139), "blue"),
+    'indicator_title': ((0, 0, 139), "blue"),
+    'indicator_super_title': ((0, 0, 139), "blue"),
 }
 
 label_list = ['title', 'explanation', 'answer', 'super_title', 'header', 'footer', 'ending', 'heading', 'starting',

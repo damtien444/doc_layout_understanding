@@ -40,9 +40,9 @@ def search_box(x, y, instance_dict):
 
     return None, None
 
-layout_lmv3 = True
+layout_lmv3 = False
 
-pretrained_model_path = "/home/tiendq/Desktop/DocRec/3_model_checkpoint/GPU-4_0_model_repository/2_30ep_8bs_noWDecay" \
+pretrained_model_path = "/home/tiendq/Desktop/DocRec/3_model_checkpoint/LayoutXLM/w. indicator" \
      if not layout_lmv3 else "/home/tiendq/Desktop/DocRec/3_model_checkpoint/LayoutLMv3/0_pilot_training_kaggle"
 
 processor = (
@@ -66,7 +66,7 @@ model = model_class.from_pretrained(
     label2id=torch_dataset.label2id,
 )
 
-model_root_ques_dir = "/home/tiendq/Desktop/DocRec/2_data_preparation/dcu_layout_layoutxlm_output/questions"
+model_root_ques_dir = "/home/tiendq/Desktop/DocRec/2_data_preparation/layoutxlm_indicator/questions"
 no_model_root_ques_dir = "/home/tiendq/Desktop/DocRec/2_data_preparation/dcu_layout_no_model_output/questions"
 
 def mouse_click(event, x, y, flags, *param):
