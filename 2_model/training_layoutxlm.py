@@ -152,13 +152,17 @@ def prepare_examples(examples, with_indicator=with_indicator):
     word_labels = examples[label_column_name]
 
     # encoding = processor(images, words, boxes=boxes, word_labels=word_labels, return_overflowing_tokens=True, return_offsets_mapping=True)
-    encoding = processor.tokenizer(words, boxes=boxes, word_labels=word_labels, return_overflowing_tokens=True,
-                                   return_offsets_mapping=True, clean_up_tokenization_spaces=True,
-                                   skip_special_tokens=True)
 
-    offset_mapping = encoding.pop('offset_mapping')
-    overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
+
     if with_indicator:
+
+        encoding = processor.tokenizer(words, boxes=boxes, word_labels=word_labels, return_overflowing_tokens=True,
+                                       return_offsets_mapping=True, clean_up_tokenization_spaces=True,
+                                       skip_special_tokens=True)
+
+        offset_mapping = encoding.pop('offset_mapping')
+        overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
+
         # _image = encoding['image']
         _token = encoding['input_ids']
         _words = copy.deepcopy(_token)
@@ -233,6 +237,14 @@ def prepare_examples(examples, with_indicator=with_indicator):
         offset_mapping = encoding.pop('offset_mapping')
         overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
 
+    else:
+        encoding = processor(images, words, boxes=boxes, word_labels=word_labels, truncation=True, stride=128,
+                             padding="max_length", max_length=512, return_overflowing_tokens=True,
+                             return_offsets_mapping=True)
+
+        offset_mapping = encoding.pop('offset_mapping')
+        overflow_to_sample_mapping = encoding.pop('overflow_to_sample_mapping')
+
     return encoding
 
 def compute_metrics(p):
@@ -272,10 +284,10 @@ def compute_metrics(p):
     #     "accuracy": results["overall_accuracy"],
     # }
 
-# anno_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/0_data_repository/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
-# image_root_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
-anno_file = "/kaggle/input/vietnamese-exam-doc-layout-annotations/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
-image_root_folder = "/kaggle/input/vietnamese-exam-doc-layout/2_selected_sample"
+anno_file = "/home/tiendq/PycharmProjects/DeepLearningDocReconstruction/0_data_repository/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
+image_root_folder = "/home/tiendq/Desktop/DocRec/2_data_preparation/2_selected_sample"
+# anno_file = "/kaggle/input/vietnamese-exam-doc-layout-annotations/1000DataForOCR_fineLabel_dataset_coco_v1.1_titleNsuptitle.json"
+# image_root_folder = "/kaggle/input/vietnamese-exam-doc-layout/2_selected_sample"
 torch_dataset = DocumentLayoutAnalysisDataset(image_root_folder, anno_file)
 
 model = LayoutLMv2ForTokenClassification.from_pretrained(
