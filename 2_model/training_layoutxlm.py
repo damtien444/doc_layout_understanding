@@ -297,8 +297,8 @@ model = LayoutLMv2ForTokenClassification.from_pretrained(
     id2label=id2label,
     label2id=label2id)
 
-if with_torch_2:
-    model = torch.compile(model)
+# if with_torch_2:
+#     model = torch.compile(model)
 
 metric = load_metric("seqeval")
 
@@ -353,16 +353,16 @@ for idx_fold in range(fold_num):
     checkpoint_dir = "0_model_repository/1_update_titleandsupertitlemismatch"
     training_args = TrainingArguments(
         output_dir=checkpoint_dir,  # output directory
-        num_train_epochs=3,  # total number of training epochs
+        num_train_epochs=1,  # total number of training epochs
         per_device_train_batch_size=4,  # batch size per device during training
         per_device_eval_batch_size=4,  # batch size for evaluation
         warmup_steps=30,  # number of warmup steps for learning rate scheduler
         weight_decay=0.01,
         learning_rate=5e-5,
         evaluation_strategy="steps",
-        eval_steps=500,  # strength of weight decay
+        eval_steps=250,  # strength of weight decay
         logging_dir=f'{checkpoint_dir}/logs',  # directory for storing logs
-        logging_steps=500,
+        logging_steps=250,
         load_best_model_at_end=True,
         metric_for_best_model="overall_f1",
         greater_is_better=True,
