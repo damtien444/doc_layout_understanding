@@ -1,6 +1,6 @@
 torch 
 torchvision 
-torchaudio 
+torchaudio
 
 transformers @  git+https://github.com/huggingface/transformers.git
 

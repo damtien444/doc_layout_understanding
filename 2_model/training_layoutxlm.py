@@ -47,7 +47,8 @@ final_expression = r"(^((Câu|CÂU)|(Bài)|(Ví dụ)) *?(0|[1-9][0-9]?[0-9]?|10
 os.environ['WANDB_PROJECT'] = "layoutxlm"
 os.environ['WANDB_NOTEBOOK_NAME'] = "LayoutXLM for document layout analysis kaggle"
 os.environ['WANDB_API_KEY'] = "660c57d70a4424e5eea4d022af08716e197d2c6a"
-with_indicator = False
+with_indicator = True
+with_torch_2 = True
 wandb.login()
 
 processor = LayoutXLMProcessor.from_pretrained(
@@ -295,6 +296,9 @@ model = LayoutLMv2ForTokenClassification.from_pretrained(
     num_labels=len(label_list),
     id2label=id2label,
     label2id=label2id)
+
+if with_torch_2:
+    model = torch.compile(model)
 
 metric = load_metric("seqeval")
 

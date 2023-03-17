@@ -4,20 +4,42 @@ import textwrap
 
 from transformers import LayoutXLMProcessor, LayoutLMv2ForTokenClassification
 from transformers import LayoutLMv3Processor, LayoutLMv3ForTokenClassification
-from data_loader_coco_image import DocumentLayoutAnalysisDataset, unnormalize_bbox, color_map
+from data_loader_coco_image import DocumentLayoutAnalysisDataset, unnormalize_bbox, color_map, label_list
 import torch
 from termcolor import colored
 from collections import Counter
 
+os.environ['TOKENIZERS_PARALLELISM'] = "false"
 
+indicator_list = ['indicator_answer', 'indicator_title', 'indicator_super_title']
+replacement_indicator = ['answer', 'title', 'super_title']
+label2id = {label: idx for idx, label in enumerate(label_list)}
+id2label = {idx: label for idx, label in enumerate(label_list)}
+indicator_ids = [label2id[label] for label in indicator_list]
+replacement_ids = [label2id[label] for label in replacement_indicator]
+indicatorid2replacementid = {indicator_id: replacement_id for indicator_id, replacement_id in zip(indicator_ids, replacement_ids)}
 
+def majority_voting_label(token_list, skip_indicator=True):
+    # def majority_vote(l):
+    vote_counts = {}
+    for token in token_list:
+        if token[1] in indicator_ids and skip_indicator:
+            vote = indicatorid2replacementid[token[1]]
+            # continue
+        else:
+            vote = token[1]
+        if vote in vote_counts.keys():
+            vote_counts[vote] += 1
+        else:
+            vote_counts[vote] = 1
 
-
-def majority_voting_label(token_list):
-    vote_counts = Counter(x[1] for x in token_list)
+    # winners = []
     max_count = max(vote_counts.values())
-    winners = [k for k, v in vote_counts.items() if v == max_count]
-    return winners[0]
+    for vote, count in vote_counts.items():
+        if count == max_count:
+            # winners.append(vote)
+
+            return vote
 
 
 
@@ -42,7 +64,7 @@ def search_box(x, y, instance_dict):
 
 layout_lmv3 = False
 
-pretrained_model_path = "/home/tiendq/Desktop/DocRec/3_model_checkpoint/LayoutXLM/w. indicator" \
+pretrained_model_path = "/home/tiendq/Desktop/DocRec/3_model_checkpoint/LayoutXLM/3_w. indicator 5 fold_separate title expression" \
      if not layout_lmv3 else "/home/tiendq/Desktop/DocRec/3_model_checkpoint/LayoutLMv3/0_pilot_training_kaggle"
 
 processor = (
@@ -65,6 +87,8 @@ model = model_class.from_pretrained(
     id2label=torch_dataset.id2label,
     label2id=torch_dataset.label2id,
 )
+
+# model = torch.compile(model)
 
 model_root_ques_dir = "/home/tiendq/Desktop/DocRec/2_data_preparation/layoutxlm_indicator/questions"
 no_model_root_ques_dir = "/home/tiendq/Desktop/DocRec/2_data_preparation/dcu_layout_no_model_output/questions"
